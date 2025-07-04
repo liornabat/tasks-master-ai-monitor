@@ -22,38 +22,64 @@ const TaskMonitor: React.FC = () => {
   const [showSourceManager, setShowSourceManager] = useState(false);
   const [showCreateSource, setShowCreateSource] = useState(false);
 
+  // Get saved context for a specific source
+  const getSavedContextForSource = useCallback((sourceId: string): string => {
+    try {
+      const sourceContextsStr = localStorage.getItem('taskMonitor.sourceContexts');
+      if (sourceContextsStr) {
+        const sourceContexts = JSON.parse(sourceContextsStr);
+        return sourceContexts[sourceId] || 'master';
+      }
+      return 'master';
+    } catch (error) {
+      console.error('Error getting saved context for source:', error);
+      return 'master';
+    }
+  }, []);
+
   // Load saved selections from localStorage
   const loadSavedSelections = useCallback(() => {
     try {
       const savedSourceId = localStorage.getItem('taskMonitor.selectedSourceId');
-      const savedContext = localStorage.getItem('taskMonitor.selectedContext');
       const savedAutoRefresh = localStorage.getItem('taskMonitor.isAutoRefresh');
       
       if (savedSourceId) {
         setSelectedSourceId(savedSourceId);
-      }
-      
-      if (savedContext) {
+        // Load the context for this specific source
+        const savedContext = getSavedContextForSource(savedSourceId);
         setSelectedContext(savedContext);
       }
       
       if (savedAutoRefresh !== null) {
         setIsAutoRefresh(savedAutoRefresh === 'true');
       }
+      
+      // Clean up old global context storage (migration)
+      if (localStorage.getItem('taskMonitor.selectedContext')) {
+        localStorage.removeItem('taskMonitor.selectedContext');
+      }
     } catch (error) {
       console.error('Error loading saved selections:', error);
     }
-  }, []);
+  }, [getSavedContextForSource]);
 
-  // Save selections to localStorage
+  // Save selections to localStorage with source-specific context mapping
   const saveSelections = useCallback((sourceId: string | null, context: string) => {
     try {
       if (sourceId) {
         localStorage.setItem('taskMonitor.selectedSourceId', sourceId);
+        
+        // Save context for this specific source
+        const sourceContextsStr = localStorage.getItem('taskMonitor.sourceContexts');
+        let sourceContexts = {};
+        if (sourceContextsStr) {
+          sourceContexts = JSON.parse(sourceContextsStr);
+        }
+        sourceContexts[sourceId] = context;
+        localStorage.setItem('taskMonitor.sourceContexts', JSON.stringify(sourceContexts));
       } else {
         localStorage.removeItem('taskMonitor.selectedSourceId');
       }
-      localStorage.setItem('taskMonitor.selectedContext', context);
     } catch (error) {
       console.error('Error saving selections:', error);
     }
@@ -104,9 +130,11 @@ const TaskMonitor: React.FC = () => {
         } else if (!selectedSourceId && sourcesData.sources.length > 0) {
           // Auto-select first source if none selected and sources exist
           const firstSource = sourcesData.sources[0];
+          const contextForFirstSource = getSavedContextForSource(firstSource.id);
           setSelectedSourceId(firstSource.id);
-          // Save the auto-selected source
-          saveSelections(firstSource.id, selectedContext);
+          setSelectedContext(contextForFirstSource);
+          // Save the auto-selected source with its context
+          saveSelections(firstSource.id, contextForFirstSource);
         } else if (savedSourceId && !sourceExists) {
           // Clear invalid saved source
           localStorage.removeItem('taskMonitor.selectedSourceId');
@@ -116,7 +144,7 @@ const TaskMonitor: React.FC = () => {
     } catch (error) {
       console.error('Error fetching sources:', error);
     }
-  }, [selectedSourceId, selectedContext, saveSelections]);
+  }, [selectedSourceId, selectedContext, saveSelections, getSavedContextForSource]);
 
   // Fetch task data function
   const fetchData = useCallback(async () => {
@@ -185,11 +213,13 @@ const TaskMonitor: React.FC = () => {
     // Reset task and subtask selection when changing source
     setSelectedTaskId('');
     setSelectedSubtask(null);
-    const newContext = 'master'; // Reset to master context
-    setSelectedContext(newContext);
+    
+    // Restore the context that was last used for this source
+    const restoredContext = getSavedContextForSource(sourceId);
+    setSelectedContext(restoredContext);
     
     // Save to localStorage
-    saveSelections(sourceId, newContext);
+    saveSelections(sourceId, restoredContext);
   };
 
   // Handle create source
@@ -216,7 +246,7 @@ const TaskMonitor: React.FC = () => {
         
         // Auto-select the new source
         const newSourceId = result.source.id;
-        const newContext = 'master';
+        const newContext = 'master'; // New sources start with master context
         setSelectedSourceId(newSourceId);
         
         // Reset selections
@@ -256,6 +286,18 @@ const TaskMonitor: React.FC = () => {
           
           // Clear from localStorage
           localStorage.removeItem('taskMonitor.selectedSourceId');
+        }
+        
+        // Clean up source-specific context from localStorage
+        try {
+          const sourceContextsStr = localStorage.getItem('taskMonitor.sourceContexts');
+          if (sourceContextsStr) {
+            const sourceContexts = JSON.parse(sourceContextsStr);
+            delete sourceContexts[sourceId];
+            localStorage.setItem('taskMonitor.sourceContexts', JSON.stringify(sourceContexts));
+          }
+        } catch (error) {
+          console.error('Error cleaning up source context:', error);
         }
       } else {
         const result = await response.json();
@@ -311,8 +353,10 @@ const TaskMonitor: React.FC = () => {
     setSelectedTaskId('');
     setSelectedSubtask(null); // Reset subtask selection when changing context
     
-    // Save to localStorage
-    saveSelections(selectedSourceId, context);
+    // Save context for current source to localStorage
+    if (selectedSourceId) {
+      saveSelections(selectedSourceId, context);
+    }
   };
 
   // Get filtered tasks for search - searches all text fields in tasks and subtasks
