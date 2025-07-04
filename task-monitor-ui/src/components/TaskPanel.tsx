@@ -161,7 +161,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ task, selectedSubtask, onSubtaskS
             {/* Implementation Details */}
             {displayItem.details && (
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">🔧 Implementation Details</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">🔧 Details</h3>
                 <div className="bg-gray-50 p-4 rounded-lg border">
                   <Markdown content={displayItem.details} />
                 </div>

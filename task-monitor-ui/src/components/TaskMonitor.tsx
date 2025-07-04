@@ -18,9 +18,55 @@ const TaskMonitor: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('disconnected');
   const [sources, setSources] = useState<Source[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
-  const [selectedSource, setSelectedSource] = useState<Source | undefined>(undefined);
+
   const [showSourceManager, setShowSourceManager] = useState(false);
   const [showCreateSource, setShowCreateSource] = useState(false);
+
+  // Load saved selections from localStorage
+  const loadSavedSelections = useCallback(() => {
+    try {
+      const savedSourceId = localStorage.getItem('taskMonitor.selectedSourceId');
+      const savedContext = localStorage.getItem('taskMonitor.selectedContext');
+      const savedAutoRefresh = localStorage.getItem('taskMonitor.isAutoRefresh');
+      
+      if (savedSourceId) {
+        setSelectedSourceId(savedSourceId);
+      }
+      
+      if (savedContext) {
+        setSelectedContext(savedContext);
+      }
+      
+      if (savedAutoRefresh !== null) {
+        setIsAutoRefresh(savedAutoRefresh === 'true');
+      }
+    } catch (error) {
+      console.error('Error loading saved selections:', error);
+    }
+  }, []);
+
+  // Save selections to localStorage
+  const saveSelections = useCallback((sourceId: string | null, context: string) => {
+    try {
+      if (sourceId) {
+        localStorage.setItem('taskMonitor.selectedSourceId', sourceId);
+      } else {
+        localStorage.removeItem('taskMonitor.selectedSourceId');
+      }
+      localStorage.setItem('taskMonitor.selectedContext', context);
+    } catch (error) {
+      console.error('Error saving selections:', error);
+    }
+  }, []);
+
+  // Save auto-refresh setting to localStorage
+  const saveAutoRefreshSetting = useCallback((autoRefresh: boolean) => {
+    try {
+      localStorage.setItem('taskMonitor.isAutoRefresh', autoRefresh.toString());
+    } catch (error) {
+      console.error('Error saving auto-refresh setting:', error);
+    }
+  }, []);
 
   // Auto-migrate existing tasks if needed
   const checkAndMigrate = useCallback(async () => {
@@ -31,7 +77,6 @@ const TaskMonitor: React.FC = () => {
       const result = await response.json();
       
       if (result.migrated) {
-        console.log('Successfully migrated existing tasks.json');
         return true;
       }
       return false;
@@ -49,17 +94,29 @@ const TaskMonitor: React.FC = () => {
         const sourcesData = await response.json();
         setSources(sourcesData.sources);
         
-        // Auto-select first source if none selected and sources exist
-        if (!selectedSourceId && sourcesData.sources.length > 0) {
+        // Validate saved source ID exists in fetched sources
+        const savedSourceId = localStorage.getItem('taskMonitor.selectedSourceId');
+        const sourceExists = sourcesData.sources.some((s: Source) => s.id === savedSourceId);
+        
+        if (savedSourceId && sourceExists) {
+          // Use saved source if it still exists
+          setSelectedSourceId(savedSourceId);
+        } else if (!selectedSourceId && sourcesData.sources.length > 0) {
+          // Auto-select first source if none selected and sources exist
           const firstSource = sourcesData.sources[0];
           setSelectedSourceId(firstSource.id);
-          setSelectedSource(firstSource);
+          // Save the auto-selected source
+          saveSelections(firstSource.id, selectedContext);
+        } else if (savedSourceId && !sourceExists) {
+          // Clear invalid saved source
+          localStorage.removeItem('taskMonitor.selectedSourceId');
+          setSelectedSourceId(null);
         }
       }
     } catch (error) {
       console.error('Error fetching sources:', error);
     }
-  }, [selectedSourceId]);
+  }, [selectedSourceId, selectedContext, saveSelections]);
 
   // Fetch task data function
   const fetchData = useCallback(async () => {
@@ -73,18 +130,12 @@ const TaskMonitor: React.FC = () => {
       if (response.ok) {
         const taskData = await response.json();
         setData(taskData);
-        setSelectedSource(taskData.source);
         setConnectionStatus('connected');
         
         // Auto-select first task if none selected and tasks exist
         if (!selectedTaskId && taskData.tags[selectedContext]?.tasks?.length > 0) {
           setSelectedTaskId(taskData.tags[selectedContext].tasks[0].id.toString());
           setSelectedSubtask(null); // Reset subtask selection when auto-selecting task
-        }
-        
-        // Reset subtask selection if selected task changed  
-        if (selectedSubtask && parseInt(selectedTaskId) !== taskData.tags[selectedContext]?.tasks?.find((t: Task) => t.subtasks?.some(s => s.id === selectedSubtask.id))?.id) {
-          setSelectedSubtask(null);
         }
       } else {
         setConnectionStatus('error');
@@ -93,11 +144,14 @@ const TaskMonitor: React.FC = () => {
       console.error('Error fetching task data:', error);
       setConnectionStatus('error');
     }
-  }, [selectedTaskId, selectedContext, selectedSubtask, selectedSourceId]);
+  }, [selectedTaskId, selectedContext, selectedSourceId]);
 
-  // Initial setup - check migration and fetch sources
+  // Initial setup - load saved selections, check migration and fetch sources
   useEffect(() => {
     const initializeApp = async () => {
+      // Load saved selections first
+      loadSavedSelections();
+      
       await checkAndMigrate();
       fetchSources(); // Don't await this to avoid dependency issues
     };
@@ -127,20 +181,27 @@ const TaskMonitor: React.FC = () => {
     }
     
     setSelectedSourceId(sourceId);
-    const source = sources.find(s => s.id === sourceId);
-    setSelectedSource(source);
     
     // Reset task and subtask selection when changing source
     setSelectedTaskId('');
     setSelectedSubtask(null);
-    setSelectedContext('master'); // Reset to master context
+    const newContext = 'master'; // Reset to master context
+    setSelectedContext(newContext);
+    
+    // Save to localStorage
+    saveSelections(sourceId, newContext);
   };
 
   // Handle create source
   const handleCreateSource = async (data: CreateSourceRequest) => {
     const formData = new FormData();
     formData.append('name', data.name);
-    formData.append('file', data.file);
+    
+    if (data.file) {
+      formData.append('file', data.file);
+    } else if (data.filePath) {
+      formData.append('filePath', data.filePath);
+    }
 
     try {
       const response = await fetch('/api/sources', {
@@ -151,17 +212,20 @@ const TaskMonitor: React.FC = () => {
       const result = await response.json();
       
       if (response.ok) {
-        console.log('Source created successfully:', result.message);
         await fetchSources(); // Refresh sources list
         
         // Auto-select the new source
-        setSelectedSourceId(result.source.id);
-        setSelectedSource(result.source);
+        const newSourceId = result.source.id;
+        const newContext = 'master';
+        setSelectedSourceId(newSourceId);
         
         // Reset selections
         setSelectedTaskId('');
         setSelectedSubtask(null);
-        setSelectedContext('master');
+        setSelectedContext(newContext);
+        
+        // Save to localStorage
+        saveSelections(newSourceId, newContext);
       } else {
         console.error('Source creation failed:', result.message);
         throw new Error(result.message);
@@ -180,17 +244,18 @@ const TaskMonitor: React.FC = () => {
       });
 
       if (response.ok) {
-        console.log('Source deleted successfully');
         await fetchSources(); // Refresh sources list
         
         // If deleted source was selected, clear selection
         if (selectedSourceId === sourceId) {
           setSelectedSourceId(null);
-          setSelectedSource(undefined);
           setData(null);
           setSelectedTaskId('');
           setSelectedSubtask(null);
           setConnectionStatus('disconnected');
+          
+          // Clear from localStorage
+          localStorage.removeItem('taskMonitor.selectedSourceId');
         }
       } else {
         const result = await response.json();
@@ -245,6 +310,9 @@ const TaskMonitor: React.FC = () => {
     setSelectedContext(context);
     setSelectedTaskId('');
     setSelectedSubtask(null); // Reset subtask selection when changing context
+    
+    // Save to localStorage
+    saveSelections(selectedSourceId, context);
   };
 
   // Get filtered tasks for search - searches all text fields in tasks and subtasks
@@ -326,7 +394,11 @@ const TaskMonitor: React.FC = () => {
         <Header
           connectionStatus={connectionStatus}
           isAutoRefresh={isAutoRefresh}
-          onAutoRefreshToggle={() => setIsAutoRefresh(!isAutoRefresh)}
+          onAutoRefreshToggle={() => {
+            const newAutoRefresh = !isAutoRefresh;
+            setIsAutoRefresh(newAutoRefresh);
+            saveAutoRefreshSetting(newAutoRefresh);
+          }}
           availableContexts={availableContexts}
           selectedContext={selectedContext}
           onContextChange={handleContextChange}
@@ -334,7 +406,6 @@ const TaskMonitor: React.FC = () => {
           selectedSourceId={selectedSourceId}
           onSourceChange={handleSourceChange}
           onManageSources={handleManageSources}
-          selectedSource={selectedSource}
         />
       </div>
 

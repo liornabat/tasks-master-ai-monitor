@@ -19,7 +19,6 @@ interface HeaderProps {
   selectedSourceId: string | null;
   onSourceChange: (sourceId: string) => void;
   onManageSources: () => void;
-  selectedSource?: Source;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -33,7 +32,6 @@ const Header: React.FC<HeaderProps> = ({
   selectedSourceId,
   onSourceChange,
   onManageSources,
-  selectedSource,
 }) => {
 
   // Function to get connection status badge content
@@ -62,12 +60,9 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <header className="border-b border-gray-200 bg-white p-4">
       <div className="flex items-center justify-between">
-        {/* Left section - Title and source info */}
+        {/* Left section - Title */}
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-gray-900">Task Execution Monitor</h1>
-          {selectedSource && (
-            <p className="text-sm text-gray-500 mt-1">📁 {selectedSource.fileName}</p>
-          )}
+          <h1 className="text-2xl font-bold text-gray-900">Tasks Master AI Monitor</h1>
         </div>
 
         {/* Right section - Source selection, controls and status */}
@@ -80,13 +75,13 @@ const Header: React.FC<HeaderProps> = ({
             onManageSources={onManageSources}
           />
 
-          {/* Context selector */}
+          {/* Tag selector */}
           {availableContexts.length > 1 && (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600 whitespace-nowrap">Context:</span>
+              <span className="text-sm text-gray-600 whitespace-nowrap">Tag:</span>
               <Select value={selectedContext} onValueChange={onContextChange}>
                 <SelectTrigger className="w-[140px] bg-white">
-                  <SelectValue placeholder="Select context" />
+                  <SelectValue placeholder="Select tag" />
                 </SelectTrigger>
                 <SelectContent>
                   {availableContexts.map((context) => (

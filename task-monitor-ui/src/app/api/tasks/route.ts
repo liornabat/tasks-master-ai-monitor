@@ -52,18 +52,43 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: 'Source not found' }, { status: 404 });
     }
     
-    // Check if file exists
-    const filePath = path.join(FILES_DIR, source.filePath);
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json({ message: 'Source file not found' }, { status: 404 });
+    // Try to read from original path first, fallback to local copy
+    let content: string;
+    
+          if (fs.existsSync(source.originalPath)) {
+        try {
+          fs.accessSync(source.originalPath, fs.constants.R_OK);
+          content = fs.readFileSync(source.originalPath, 'utf8');
+      } catch {
+        // If original path fails and we have a backup, use it
+        if (source.filePath) {
+          const backupPath = path.join(FILES_DIR, source.filePath);
+          if (fs.existsSync(backupPath)) {
+            content = fs.readFileSync(backupPath, 'utf8');
+          } else {
+            return NextResponse.json({ message: 'Source file not accessible and no backup available' }, { status: 404 });
+          }
+        } else {
+          return NextResponse.json({ message: 'Source file not accessible' }, { status: 404 });
+        }
+      }
+    } else {
+      // Original file doesn't exist, try backup
+      if (source.filePath) {
+        const backupPath = path.join(FILES_DIR, source.filePath);
+        if (fs.existsSync(backupPath)) {
+          content = fs.readFileSync(backupPath, 'utf8');
+        } else {
+          return NextResponse.json({ message: 'Source file not found' }, { status: 404 });
+        }
+      } else {
+        return NextResponse.json({ message: 'Source file not found' }, { status: 404 });
+      }
     }
     
     // Update lastUsed
     source.lastUsed = new Date().toISOString();
     saveSources(sources);
-    
-    // Read the file
-    const content = fs.readFileSync(filePath, 'utf8');
     const taskData = JSON.parse(content);
     
     // Return the data in the expected format along with source info

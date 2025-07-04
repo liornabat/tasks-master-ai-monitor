@@ -43,16 +43,19 @@ export interface Source {
   id: string;
   name: string;
   fileName: string;
-  filePath: string;
+  filePath?: string; // Local copy (backup)
+  originalPath: string; // Always read from here first
   createdAt: string;
   lastUsed?: string;
   hasError?: boolean;
   errorMessage?: string;
+  isUploaded?: boolean; // True if file was uploaded, false if path was specified
 }
 
 export interface CreateSourceRequest {
   name: string;
-  file: File;
+  file?: File; // For uploaded files
+  filePath?: string; // For existing file paths
 }
 
 export interface SourcesResponse {

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:quiet": "next dev --turbopack | grep -v ' GET \\| POST \\| PUT \\| DELETE '",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
