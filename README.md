@@ -7,7 +7,21 @@ A modern, real-time task monitoring dashboard for Task Master AI projects. Built
 ![TypeScript](https://img.shields.io/badge/TypeScript-5+-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+## 🔗 Getting Task Master AI
 
+This monitor is designed to work with **Task Master AI**, an AI-powered task management system. To use this monitoring dashboard, you'll need to have Task Master AI installed and running.
+
+### Download Task Master AI
+Visit **[https://www.task-master.dev/](https://www.task-master.dev/)** to download and install Task Master AI.
+
+### Requirements
+- Task Master AI must be installed and generating `tasks.json` files
+- The monitor reads these files to display your task data
+- Works with any Task Master AI project that outputs standard task files
+
+Once you have Task Master AI set up and running, you can use this monitor to visualize and track your tasks in real-time.
+
+---
 ## 📸 Screenshots
 
 ### Dashboard Overview

@@ -5,8 +5,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Task Master AI - Monitor',
-  description: 'Real-time task monitoring interface for tracking task master ai progress and execution',
+  title: 'TaskMasterAI - Monitor',
+  description: 'Real-time task monitoring interface for tracking TaskMasterAI progress and execution',
 }
 
 export default function RootLayout({

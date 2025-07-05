@@ -62,7 +62,7 @@ const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center justify-between">
         {/* Left section - Title */}
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Task Master AI Monitor</h1>
+          <h1 className="text-2xl font-bold text-gray-900">TaskMasterAI Monitor</h1>
         </div>
 
         {/* Right section - Source selection, controls and status */}
